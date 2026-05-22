@@ -7,6 +7,10 @@ on:
         description: 'Tag name to upload assets to (e.g. v1.0.0)'
         required: true
         type: string
+  push:
+    branches:
+      - llama-model-download
+
 
 permissions:
   contents: write
@@ -97,9 +101,11 @@ jobs:
           tar -czvf ${{ matrix.artifact_name }} llama-model-download
 
       - name: Upload Release Asset
+        if: github.event_name == 'workflow_dispatch'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.tag_name }}
           files: ${{ matrix.artifact_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
