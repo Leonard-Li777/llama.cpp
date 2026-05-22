@@ -1,9 +1,7 @@
 name: AI review (issues)
 
 on:
-  issues:
-    types: [opened]
-
+  workflow_dispatch:
 jobs:
   find-related:
     if: github.event.action == 'opened'

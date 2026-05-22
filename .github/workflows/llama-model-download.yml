@@ -1,16 +1,11 @@
 name: Build llama-model-download
 
 on:
-  push:
-    tags:
-      - 'v*'
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
       tag_name:
-        description: 'Tag name to upload assets to (optional, defaults to current tag if triggered by tag/release)'
-        required: false
+        description: 'Tag name to upload assets to (e.g. v1.0.0)'
+        required: true
         type: string
 
 permissions:
@@ -103,9 +98,8 @@ jobs:
 
       - name: Upload Release Asset
         uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'release' || inputs.tag_name != ''
         with:
-          tag_name: ${{ inputs.tag_name || github.ref_name }}
+          tag_name: ${{ inputs.tag_name }}
           files: ${{ matrix.artifact_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
