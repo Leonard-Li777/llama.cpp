@@ -1,0 +1,111 @@
+name: Build llama-model-download
+
+on:
+  push:
+    tags:
+      - 'v*'
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Tag name to upload assets to (optional, defaults to current tag if triggered by tag/release)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.artifact_name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            arch: x64
+            cmake_arch: ''
+            extra_cmake_args: ''
+            artifact_name: llama-model-download-linux-x64.tar.gz
+          - os: ubuntu-24.04-arm
+            arch: arm64
+            cmake_arch: ''
+            extra_cmake_args: ''
+            artifact_name: llama-model-download-linux-arm64.tar.gz
+          - os: macos-13
+            arch: x64
+            cmake_arch: ''
+            extra_cmake_args: '-DLLAMA_BUILD_BORINGSSL=ON'
+            artifact_name: llama-model-download-darwin-x64.tar.gz
+          - os: macos-14
+            arch: arm64
+            cmake_arch: ''
+            extra_cmake_args: '-DLLAMA_BUILD_BORINGSSL=ON'
+            artifact_name: llama-model-download-darwin-arm64.tar.gz
+          - os: windows-2025
+            arch: x64
+            cmake_arch: x64
+            extra_cmake_args: '-DLLAMA_BUILD_BORINGSSL=ON'
+            artifact_name: llama-model-download-win32-x64.zip
+
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v6
+
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libssl-dev
+
+      - name: Configure CMake (Windows)
+        if: runner.os == 'Windows'
+        run: >
+          cmake -B build
+          -A ${{ matrix.cmake_arch }}
+          -DLLAMA_BUILD_EXAMPLES=OFF
+          -DLLAMA_BUILD_TESTS=OFF
+          -DLLAMA_BUILD_SERVER=OFF
+          -DLLAMA_BUILD_TOOLS=ON
+          ${{ matrix.extra_cmake_args }}
+
+      - name: Configure CMake (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: >
+          cmake -B build
+          -DLLAMA_BUILD_EXAMPLES=OFF
+          -DLLAMA_BUILD_TESTS=OFF
+          -DLLAMA_BUILD_SERVER=OFF
+          -DLLAMA_BUILD_TOOLS=ON
+          ${{ matrix.extra_cmake_args }}
+
+      - name: Build target
+        run: cmake --build build --config Release --target llama-model-download -j 2
+
+      - name: Pack artifacts (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $binPath = Get-ChildItem -Path build -Filter "llama-model-download.exe" -Recurse | Select-Object -First 1 -ExpandProperty FullName
+          if (-not $binPath) { throw "llama-model-download.exe not found" }
+          Copy-Item $binPath -Destination .
+          7z a ${{ matrix.artifact_name }} llama-model-download.exe
+
+      - name: Pack artifacts (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          bin_path=$(find build -name "llama-model-download" -type f | head -n 1)
+          if [ -z "$bin_path" ]; then echo "llama-model-download not found"; exit 1; fi
+          cp "$bin_path" .
+          tar -czvf ${{ matrix.artifact_name }} llama-model-download
+
+      - name: Upload Release Asset
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'release' || inputs.tag_name != ''
+        with:
+          tag_name: ${{ inputs.tag_name || github.ref_name }}
+          files: ${{ matrix.artifact_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
