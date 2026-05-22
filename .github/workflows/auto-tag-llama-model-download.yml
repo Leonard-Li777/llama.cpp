@@ -1,0 +1,47 @@
+name: Auto Tag llama-model-download
+
+on:
+  push:
+    branches:
+      - llama-model-download
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Create and push version tag
+        id: create_tag
+        run: |
+          set -e
+          BRANCH="${GITHUB_REF#refs/heads/}"
+          # Find existing tags of the form <branch>-vX.Y.Z
+          EXISTING=$(git tag -l "${BRANCH}-v*" || true)
+          if [ -z "$EXISTING" ]; then
+            # No previous tags, start with v1.0.0
+            NEW_VER="1.0.0"
+          else
+            # Sort and get the highest version
+            # Strip prefix and sort semver (simple lexical works for X.Y.Z)
+            LATEST=$(echo "$EXISTING" | sort -V | tail -n1)
+            # Extract version part after '-v'
+            CUR_VER=${LATEST##*-v}
+            # Split into components
+            IFS='.' read -r MAJ MIN PATCH <<<"$CUR_VER"
+            # Increment patch number
+            PATCH=$((PATCH + 1))
+            NEW_VER="${MAJ}.${MIN}.${PATCH}"
+          fi
+          TAG="${BRANCH}-v${NEW_VER}"
+          echo "Creating tag $TAG"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "$TAG"
+          git push origin "$TAG"
