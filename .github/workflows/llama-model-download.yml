@@ -8,8 +8,9 @@ on:
         required: false
         type: string
   push:
-    branches:
-      - llama-model-download
+    tags:
+      - '*'
+
 
 
 permissions:
